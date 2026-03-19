@@ -164,16 +164,16 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     if (!buf) { perror("malloc"); exit(1); }
 
     compute_tile(params, tile, buf);
-    
+
     // Escrever cabeçalho: ox, oy, w, h
-    write(write_fd, tile->ox, sizeof(int));
-    write(write_fd, tile->oy, sizeof(int));
-    write(write_fd, tile->w, sizeof(int));
-    write(write_fd, tile->h, sizeof(int));
+    write(write_fd, &(tile->ox), sizeof(int));
+    write(write_fd, &(tile->oy), sizeof(int));
+    write(write_fd, &(tile->w), sizeof(int));
+    write(write_fd, &(tile->h), sizeof(int));
     
     // Escrever pixels
     for (int i=0;i<n_pixels;i++){
-        write(write_fd, buf[i], sizeof(int));
+        write(write_fd, &buf[i], sizeof(unsigned char));
     }
     // Lembre: use um loop para garantir que todos os bytes foram escritos!
     
@@ -210,23 +210,56 @@ int pool_collect_ready(Pool *pool, TileResult *result)
 
     if (pool->active == 0) return 0;
 
-    /* Dica de estrutura com select():
-     *
-     * fd_set rfds;
-     * FD_ZERO(&rfds);
-     * int maxfd = -1;
-     * for (int i = 0; i < pool->max; i++) {
-     *     if (pool->entries[i].pid != -1) {
-     *         FD_SET(pool->entries[i].read_fd, &rfds);
-     *         if (pool->entries[i].read_fd > maxfd)
-     *             maxfd = pool->entries[i].read_fd;
-     *     }
-     * }
-     *
-     * struct timeval tv = {0, 0}; // timeout zero = não bloqueia
-     * int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);
-     * if (ready <= 0) return 0;
-     *
+    // Dica de estrutura com select():
+    
+    // rfds funciona como um bit mask, que aciona o 'bit' dos processos com dado em ready
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    int maxfd = -1;
+    for (int i = 0; i < pool->max; i++) {
+        if (pool->entries[i].pid != -1) {
+            FD_SET(pool->entries[i].read_fd, &rfds);
+            // FD_SET funciona como um bit
+            if (pool->entries[i].read_fd > maxfd)
+                maxfd = pool->entries[i].read_fd;
+        }
+    }
+    
+    struct timeval tv = {0, 0}; // timeout zero = não bloqueia
+    int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);
+    if (ready <= 0) return 0;
+
+    // tal laço for me parece um pouco desnecessário, a variável maxfd já não retorna um possivel fd para ser utilizado(?)
+
+    // percorre todos os entries para descobrir quais processos-filhos estão com dados em ready
+    for(int i = 0; i < pool->max; i++){
+        PoolEntry *entry = &pool->entries[i];
+
+        if(entry->pid != -1 && FD_ISSET(entry->read_fd, &rfds)){
+        // Tenta ler o primeiro dado. Se retornar <= 0 (EOF), o filho morreu e não há mais o que ler.
+        int r = read(entry->read_fd, &(result->tile.ox), sizeof(int));
+        if (r <= 0) {
+            continue; // Pula para o próximo. Deixa o pool_reap limpar a bagunça depois.
+        }
+
+        // Se chegou aqui, os dados são reais! Pode ler o resto.
+        read(entry->read_fd, &(result->tile.oy), sizeof(int));
+        read(entry->read_fd, &(result->tile.w), sizeof(int));
+        read(entry->read_fd, &(result->tile.h), sizeof(int));
+
+        int n_pixels = result->tile.w * result->tile.h;
+        result->pixels = malloc(n_pixels);
+
+        for(int j = 0; j < n_pixels; j++){
+            read(entry->read_fd, &result->pixels[j], 1);
+        }
+
+        // Apenas retorna. NÃO FECHAMOS O CANO AQUI, respeitando o ipc.h!
+        return 1;
+        }
+    }
+    
+     /*
      * // Para cada entrada com dados:
      * //   ler cabeçalho (4 ints: ox, oy, w, h)
      * //   alocar result->pixels com malloc(w * h)
@@ -244,7 +277,26 @@ int pool_collect_ready(Pool *pool, TileResult *result)
  * TODO: implemente esta função.
  * ========================================================================= */
 void pool_reap(Pool *pool)
-{
+{   
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        // encontrar a entrada com esse pid no pool
+        for(int i = 0; i < pool->max; i++){
+            PoolEntry *currentPool = &pool->entries[i];
+            if(pid == currentPool->pid){
+                close(currentPool->read_fd);
+                currentPool->pid = -1;
+                currentPool->read_fd = -1;
+                pool->active--;
+            }
+        }
+
+        // fechar o read_fd correspondente
+        // marcar a entrada como livre (pid = -1, read_fd = -1)
+        // decrementar pool->active
+    }
+
     /* Dica de estrutura:
      *
      * int status;
