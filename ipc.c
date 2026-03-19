@@ -179,7 +179,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     
     close(write_fd);
     free(buf);
-    exit(0);
+    //exit(0);
     
     /* Dica de estrutura:
      *
@@ -229,6 +229,8 @@ int pool_collect_ready(Pool *pool, TileResult *result)
     int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);
     if (ready <= 0) return 0;
 
+    // tal laço for me parece um pouco desnecessário, a variável maxfd já não retorna um possivel fd para ser utilizado(?)
+
     // percorre todos os entries para descobrir quais processos-filhos estão com dados em ready
     for(int i = 0; i < pool->max; i++){
         PoolEntry currentPool = pool->entries[i];
@@ -243,7 +245,9 @@ int pool_collect_ready(Pool *pool, TileResult *result)
 
             for(int j = 0; j < n_pixels; j++){
                 read(currentPool.read_fd, &result->pixels[j], 1);
-            }   
+            }
+
+            return 1;
             
         }
     }
@@ -266,7 +270,26 @@ int pool_collect_ready(Pool *pool, TileResult *result)
  * TODO: implemente esta função.
  * ========================================================================= */
 void pool_reap(Pool *pool)
-{
+{   
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        // encontrar a entrada com esse pid no pool
+        for(int i = 0; i < pool->max; i++){
+            PoolEntry *currentPool = &pool->entries[i];
+            if(pid == currentPool->pid){
+                close(currentPool->read_fd);
+                currentPool->pid = -1;
+                currentPool->read_fd = -1;
+                pool->active--;
+            }
+        }
+
+        // fechar o read_fd correspondente
+        // marcar a entrada como livre (pid = -1, read_fd = -1)
+        // decrementar pool->active
+    }
+
     /* Dica de estrutura:
      *
      * int status;
