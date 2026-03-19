@@ -100,6 +100,32 @@ void launch_worker(Pool *pool, const RenderParams *params, const Tile *t)
     (void)params;
     (void)t;
 
+    int fd[2];
+
+    if (pool->active >= pool->max) {perror("Max Child"); return;}
+
+    if (pipe(fd) == -1) { perror("pipe"); return; }
+    pid_t pid = fork();
+    if (pid < 0) { perror("fork"); close(fd[0]); close(fd[1]); return; }
+    
+    if (pid == 0) {
+        // filho
+        close(fd[0]);
+        worker_main(params, t, fd[1]);
+        // worker_main não retorna
+    }
+    else{
+        // pai
+        close(fd[1]);
+        for (int i=0; i<pool->max; i++){
+            if (pool->entries[i].pid == -1){
+                pool->entries[i].pid = pid;
+                pool->active++;
+                pool->entries[i].read_fd = fd[0];
+                break;
+            }
+        }
+    }
     /* Dica de estrutura:
      *
      * int fd[2];
@@ -133,6 +159,28 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     (void)tile;
     (void)write_fd;
 
+    int n_pixels = tile->w * tile->h;
+    unsigned char *buf = malloc(n_pixels);
+    if (!buf) { perror("malloc"); exit(1); }
+
+    compute_tile(params, tile, buf);
+    
+    // Escrever cabeçalho: ox, oy, w, h
+    write(write_fd, tile->ox, sizeof(int));
+    write(write_fd, tile->oy, sizeof(int));
+    write(write_fd, tile->w, sizeof(int));
+    write(write_fd, tile->h, sizeof(int));
+    
+    // Escrever pixels
+    for (int i=0;i<n_pixels;i++){
+        write(write_fd, buf[i], sizeof(int));
+    }
+    // Lembre: use um loop para garantir que todos os bytes foram escritos!
+    
+    close(write_fd);
+    free(buf);
+    exit(0);
+    
     /* Dica de estrutura:
      *
      * int n_pixels = tile->w * tile->h;
@@ -149,8 +197,6 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
      * free(buf);
      * exit(0);
      */
-
-    exit(0); /* remova esta linha quando implementar */
 }
 
 /* =========================================================================
