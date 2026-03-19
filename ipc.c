@@ -166,14 +166,14 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     compute_tile(params, tile, buf);
 
     // Escrever cabeçalho: ox, oy, w, h
-    write(write_fd, tile->ox, sizeof(int));
-    write(write_fd, tile->oy, sizeof(int));
-    write(write_fd, tile->w, sizeof(int));
-    write(write_fd, tile->h, sizeof(int));
+    write(write_fd, &(tile->ox), sizeof(int));
+    write(write_fd, &(tile->oy), sizeof(int));
+    write(write_fd, &(tile->w), sizeof(int));
+    write(write_fd, &(tile->h), sizeof(int));
     
     // Escrever pixels
     for (int i=0;i<n_pixels;i++){
-        write(write_fd, buf[i], sizeof(int));
+        write(write_fd, &buf[i], sizeof(unsigned char));
     }
     // Lembre: use um loop para garantir que todos os bytes foram escritos!
     
@@ -210,23 +210,45 @@ int pool_collect_ready(Pool *pool, TileResult *result)
 
     if (pool->active == 0) return 0;
 
-    /* Dica de estrutura com select():
-     *
-     * fd_set rfds;
-     * FD_ZERO(&rfds);
-     * int maxfd = -1;
-     * for (int i = 0; i < pool->max; i++) {
-     *     if (pool->entries[i].pid != -1) {
-     *         FD_SET(pool->entries[i].read_fd, &rfds);
-     *         if (pool->entries[i].read_fd > maxfd)
-     *             maxfd = pool->entries[i].read_fd;
-     *     }
-     * }
-     *
-     * struct timeval tv = {0, 0}; // timeout zero = não bloqueia
-     * int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);
-     * if (ready <= 0) return 0;
-     *
+    // Dica de estrutura com select():
+    
+    // rfds funciona como um bit mask, que aciona o 'bit' dos processos com dado em ready
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    int maxfd = -1;
+    for (int i = 0; i < pool->max; i++) {
+        if (pool->entries[i].pid != -1) {
+            FD_SET(pool->entries[i].read_fd, &rfds);
+            // FD_SET funciona como um bit
+            if (pool->entries[i].read_fd > maxfd)
+                maxfd = pool->entries[i].read_fd;
+        }
+    }
+    
+    struct timeval tv = {0, 0}; // timeout zero = não bloqueia
+    int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);
+    if (ready <= 0) return 0;
+
+    // percorre todos os entries para descobrir quais processos-filhos estão com dados em ready
+    for(int i = 0; i < pool->max; i++){
+        PoolEntry currentPool = pool->entries[i];
+        if(currentPool.pid != -1 && FD_ISSET(currentPool.read_fd, &rfds)){
+            read(currentPool.read_fd, &(result->tile.ox), sizeof(int));
+            read(currentPool.read_fd, &(result->tile.oy), sizeof(int));
+            read(currentPool.read_fd, &(result->tile.w), sizeof(int));
+            read(currentPool.read_fd, &(result->tile.h), sizeof(int));
+
+            int n_pixels = result->tile.w * result->tile.h;
+            result->pixels = malloc(n_pixels);
+
+            for(int j = 0; j < n_pixels; j++){
+                read(currentPool.read_fd, &result->pixels[j], 1);
+            }   
+            
+        }
+    }
+    
+     /*
      * // Para cada entrada com dados:
      * //   ler cabeçalho (4 ints: ox, oy, w, h)
      * //   alocar result->pixels com malloc(w * h)
