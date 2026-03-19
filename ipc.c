@@ -179,7 +179,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     
     close(write_fd);
     free(buf);
-    //exit(0);
+    exit(0);
     
     /* Dica de estrutura:
      *
@@ -233,22 +233,23 @@ int pool_collect_ready(Pool *pool, TileResult *result)
 
     // percorre todos os entries para descobrir quais processos-filhos estão com dados em ready
     for(int i = 0; i < pool->max; i++){
-        PoolEntry currentPool = pool->entries[i];
-        if(currentPool.pid != -1 && FD_ISSET(currentPool.read_fd, &rfds)){
-            read(currentPool.read_fd, &(result->tile.ox), sizeof(int));
-            read(currentPool.read_fd, &(result->tile.oy), sizeof(int));
-            read(currentPool.read_fd, &(result->tile.w), sizeof(int));
-            read(currentPool.read_fd, &(result->tile.h), sizeof(int));
+        // Ponteiro para a entrada
+        PoolEntry *entry = &pool->entries[i]; 
+        
+        if(entry->pid != -1 && FD_ISSET(entry->read_fd, &rfds)){
+            read(entry->read_fd, &(result->tile.ox), sizeof(int));
+            read(entry->read_fd, &(result->tile.oy), sizeof(int));
+            read(entry->read_fd, &(result->tile.w), sizeof(int));
+            read(entry->read_fd, &(result->tile.h), sizeof(int));
 
             int n_pixels = result->tile.w * result->tile.h;
             result->pixels = malloc(n_pixels);
 
             for(int j = 0; j < n_pixels; j++){
-                read(currentPool.read_fd, &result->pixels[j], 1);
+                read(entry->read_fd, &result->pixels[j], 1);
             }
 
             return 1;
-            
         }
     }
     
