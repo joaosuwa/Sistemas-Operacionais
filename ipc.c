@@ -164,7 +164,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     if (!buf) { perror("malloc"); exit(1); }
 
     compute_tile(params, tile, buf);
-    
+
     // Escrever cabeçalho: ox, oy, w, h
     write(write_fd, tile->ox, sizeof(int));
     write(write_fd, tile->oy, sizeof(int));
