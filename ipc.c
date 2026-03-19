@@ -233,23 +233,29 @@ int pool_collect_ready(Pool *pool, TileResult *result)
 
     // percorre todos os entries para descobrir quais processos-filhos estão com dados em ready
     for(int i = 0; i < pool->max; i++){
-        // Ponteiro para a entrada
-        PoolEntry *entry = &pool->entries[i]; 
-        
+        PoolEntry *entry = &pool->entries[i];
+
         if(entry->pid != -1 && FD_ISSET(entry->read_fd, &rfds)){
-            read(entry->read_fd, &(result->tile.ox), sizeof(int));
-            read(entry->read_fd, &(result->tile.oy), sizeof(int));
-            read(entry->read_fd, &(result->tile.w), sizeof(int));
-            read(entry->read_fd, &(result->tile.h), sizeof(int));
+        // Tenta ler o primeiro dado. Se retornar <= 0 (EOF), o filho morreu e não há mais o que ler.
+        int r = read(entry->read_fd, &(result->tile.ox), sizeof(int));
+        if (r <= 0) {
+            continue; // Pula para o próximo. Deixa o pool_reap limpar a bagunça depois.
+        }
 
-            int n_pixels = result->tile.w * result->tile.h;
-            result->pixels = malloc(n_pixels);
+        // Se chegou aqui, os dados são reais! Pode ler o resto.
+        read(entry->read_fd, &(result->tile.oy), sizeof(int));
+        read(entry->read_fd, &(result->tile.w), sizeof(int));
+        read(entry->read_fd, &(result->tile.h), sizeof(int));
 
-            for(int j = 0; j < n_pixels; j++){
-                read(entry->read_fd, &result->pixels[j], 1);
-            }
+        int n_pixels = result->tile.w * result->tile.h;
+        result->pixels = malloc(n_pixels);
 
-            return 1;
+        for(int j = 0; j < n_pixels; j++){
+            read(entry->read_fd, &result->pixels[j], 1);
+        }
+
+        // Apenas retorna. NÃO FECHAMOS O CANO AQUI, respeitando o ipc.h!
+        return 1;
         }
     }
     
