@@ -166,17 +166,57 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     compute_tile(params, tile, buf);
 
     // Escrever cabeçalho: ox, oy, w, h
-    write(write_fd, &(tile->ox), sizeof(int));
-    write(write_fd, &(tile->oy), sizeof(int));
-    write(write_fd, &(tile->w), sizeof(int));
-    write(write_fd, &(tile->h), sizeof(int));
-    
-    // Escrever pixels
-    for (int i=0;i<n_pixels;i++){
-        write(write_fd, &buf[i], sizeof(unsigned char));
+
+    int total;
+    const char *ptr;
+    int bytes_escritos;
+
+    total = 0;
+    ptr = (const char *)&(tile->ox);
+        
+    while (total < sizeof(int)){
+        bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
+        if (bytes_escritos <=0) {perror("write"); exit(1);}
+        total += bytes_escritos;
     }
-    // Lembre: use um loop para garantir que todos os bytes foram escritos!
-    
+
+    total = 0;
+    ptr = (const char *)&(tile->oy);
+        
+    while (total < sizeof(int)){
+        bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
+        if (bytes_escritos <=0) {perror("write"); exit(1);}
+        total += bytes_escritos;
+    }
+
+    total = 0;
+    ptr = (const char *)&(tile->w);
+        
+    while (total < sizeof(int)){
+        bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
+        if (bytes_escritos <=0) {perror("write"); exit(1);}
+        total += bytes_escritos;
+    }
+
+    total = 0;
+    ptr = (const char *)&(tile->h);
+        
+    while (total < sizeof(int)){
+        bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
+        if (bytes_escritos <=0) {perror("write"); exit(1);}
+        total += bytes_escritos;
+    }
+
+    total = 0;
+    ptr = (const char *)buf;
+        
+    while (total < n_pixels){
+        bytes_escritos = write(write_fd, ptr + total, n_pixels - total);
+        if (bytes_escritos <=0) {perror("write"); exit(1);}
+        total += bytes_escritos;
+    }
+
+
     close(write_fd);
     free(buf);
     exit(0);
@@ -236,26 +276,65 @@ int pool_collect_ready(Pool *pool, TileResult *result)
         PoolEntry *entry = &pool->entries[i];
 
         if(entry->pid != -1 && FD_ISSET(entry->read_fd, &rfds)){
-        // Tenta ler o primeiro dado. Se retornar <= 0 (EOF), o filho morreu e não há mais o que ler.
-        int r = read(entry->read_fd, &(result->tile.ox), sizeof(int));
-        if (r <= 0) {
-            continue; // Pula para o próximo. Deixa o pool_reap limpar a bagunça depois.
-        }
+            
+            int total;
+            char *ptr;
+            int bytes_lidos;
 
-        // Se chegou aqui, os dados são reais! Pode ler o resto.
-        read(entry->read_fd, &(result->tile.oy), sizeof(int));
-        read(entry->read_fd, &(result->tile.w), sizeof(int));
-        read(entry->read_fd, &(result->tile.h), sizeof(int));
+            // Tenta ler o primeiro dado. Se retornar <= 0 (EOF), o filho morreu e não há mais o que ler.
+            total = 0;
+            ptr = (char *)&(result->tile.ox);
+            
+            bytes_lidos = read(entry->read_fd, ptr, sizeof(int));
+            if (bytes_lidos <= 0) continue;
 
-        int n_pixels = result->tile.w * result->tile.h;
-        result->pixels = malloc(n_pixels);
+            total += bytes_lidos;
+            while (total < sizeof(int)){
+                bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
+                if (bytes_lidos <= 0) {perror("read"); exit(1);};
+                total += bytes_lidos;
+            }
+            // Lê oy, w, h da mesma forma e em loop para garantir que leu todos os bytes
+            total = 0;
+            ptr = (char *)&(result->tile.oy);
+            
+            while (total < sizeof(int)){
+                bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
+                if (bytes_lidos <= 0) {perror("read"); exit(1);};
+                total += bytes_lidos;
+            }
 
-        for(int j = 0; j < n_pixels; j++){
-            read(entry->read_fd, &result->pixels[j], 1);
-        }
+            total = 0;
+            ptr = (char *)&(result->tile.w);
+            
+            while (total < sizeof(int)){
+                bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
+                if (bytes_lidos <= 0) {perror("read"); exit(1);};
+                total += bytes_lidos;
+            }
 
-        // Apenas retorna. NÃO FECHAMOS O CANO AQUI, respeitando o ipc.h!
-        return 1;
+            total = 0;
+            ptr = (char *)&(result->tile.h);
+            
+            while (total < sizeof(int)){
+                bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
+                if (bytes_lidos <= 0) {perror("read"); exit(1);};
+                total += bytes_lidos;
+            }
+
+            int n_pixels = result->tile.w * result->tile.h;
+            result->pixels = malloc(n_pixels);
+            if (!result->pixels) { perror("malloc"); exit(1); }
+
+            total = 0;
+            ptr = (char *)result->pixels;
+            while (total < n_pixels){
+                bytes_lidos = read(entry->read_fd, ptr + total, n_pixels - total);
+                if (bytes_lidos <= 0) {perror("read"); exit(1);};
+                total += bytes_lidos;
+            }
+            // Apenas retorna. NÃO FECHAMOS O CANO AQUI, respeitando o ipc.h!
+            return 1;
         }
     }
     

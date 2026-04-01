@@ -33,8 +33,7 @@ endif
 # RAYLIB_PREFIX — defina para apontar para a instalação da RayLib.
 # Espera-se que existam $(RAYLIB_PREFIX)/lib e $(RAYLIB_PREFIX)/include.
 # Se não definido, a detecção automática (pkg-config / caminhos padrão) é usada.
-RAYLIB_PREFIX ?= /usr/local
-
+RAYLIB_PREFIX ?= /home/renan/raylib
 ifneq ($(RAYLIB_PREFIX),)
     # Prefixo explícito: usa $(RAYLIB_PREFIX)/include e $(RAYLIB_PREFIX)/lib
     RAYLIB_CFLAGS  := -I$(RAYLIB_PREFIX)/include
