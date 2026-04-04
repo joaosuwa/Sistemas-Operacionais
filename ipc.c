@@ -174,7 +174,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     total = 0;
     ptr = (const char *)&(tile->ox);
         
-    while (total < sizeof(int)){
+    while (total < (int)sizeof(int)){
         bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
         if (bytes_escritos <=0) {perror("write"); exit(1);}
         total += bytes_escritos;
@@ -183,7 +183,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     total = 0;
     ptr = (const char *)&(tile->oy);
         
-    while (total < sizeof(int)){
+    while (total < (int)sizeof(int)){
         bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
         if (bytes_escritos <=0) {perror("write"); exit(1);}
         total += bytes_escritos;
@@ -192,7 +192,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     total = 0;
     ptr = (const char *)&(tile->w);
         
-    while (total < sizeof(int)){
+    while (total < (int)sizeof(int)){
         bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
         if (bytes_escritos <=0) {perror("write"); exit(1);}
         total += bytes_escritos;
@@ -201,7 +201,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     total = 0;
     ptr = (const char *)&(tile->h);
         
-    while (total < sizeof(int)){
+    while (total < (int)sizeof(int)){
         bytes_escritos = write(write_fd, ptr + total, sizeof(int) - total);
         if (bytes_escritos <=0) {perror("write"); exit(1);}
         total += bytes_escritos;
@@ -210,7 +210,7 @@ void worker_main(const RenderParams *params, const Tile *tile, int write_fd)
     total = 0;
     ptr = (const char *)buf;
         
-    while (total < n_pixels){
+    while (total < (int)n_pixels){
         bytes_escritos = write(write_fd, ptr + total, n_pixels - total);
         if (bytes_escritos <=0) {perror("write"); exit(1);}
         total += bytes_escritos;
@@ -289,7 +289,7 @@ int pool_collect_ready(Pool *pool, TileResult *result)
             if (bytes_lidos <= 0) continue;
 
             total += bytes_lidos;
-            while (total < sizeof(int)){
+            while (total < (int)sizeof(int)){
                 bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
                 if (bytes_lidos <= 0) {perror("read"); exit(1);};
                 total += bytes_lidos;
@@ -298,7 +298,7 @@ int pool_collect_ready(Pool *pool, TileResult *result)
             total = 0;
             ptr = (char *)&(result->tile.oy);
             
-            while (total < sizeof(int)){
+            while (total < (int)sizeof(int)){
                 bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
                 if (bytes_lidos <= 0) {perror("read"); exit(1);};
                 total += bytes_lidos;
@@ -307,7 +307,7 @@ int pool_collect_ready(Pool *pool, TileResult *result)
             total = 0;
             ptr = (char *)&(result->tile.w);
             
-            while (total < sizeof(int)){
+            while (total < (int)sizeof(int)){
                 bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
                 if (bytes_lidos <= 0) {perror("read"); exit(1);};
                 total += bytes_lidos;
@@ -316,7 +316,7 @@ int pool_collect_ready(Pool *pool, TileResult *result)
             total = 0;
             ptr = (char *)&(result->tile.h);
             
-            while (total < sizeof(int)){
+            while (total < (int)sizeof(int)){
                 bytes_lidos = read(entry->read_fd, ptr + total, sizeof(int) - total);
                 if (bytes_lidos <= 0) {perror("read"); exit(1);};
                 total += bytes_lidos;
@@ -328,7 +328,7 @@ int pool_collect_ready(Pool *pool, TileResult *result)
 
             total = 0;
             ptr = (char *)result->pixels;
-            while (total < n_pixels){
+            while (total < (int)n_pixels){
                 bytes_lidos = read(entry->read_fd, ptr + total, n_pixels - total);
                 if (bytes_lidos <= 0) {perror("read"); exit(1);};
                 total += bytes_lidos;
