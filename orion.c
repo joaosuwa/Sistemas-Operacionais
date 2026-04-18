@@ -70,6 +70,7 @@ typedef struct {
   sem_t empty;
   sem_t full_normal; 
   sem_t full_alerta;
+  sem_t full_total; // criado para resolver o problema de deadlock do sem_trywait
 } Buffer;
 
 /* Contexto global compartilhado entre todas as threads */
@@ -150,6 +151,7 @@ static void buffer_init(Buffer *buf, int capacidade, int tamanho_elemento)
   sem_init(&buf->empty, 0, capacidade);
   sem_init(&buf->full_normal, 0, 0);
   sem_init(&buf->full_alerta, 0, 0);
+  sem_init(&buf->full_total, 0, 0);
 }
 
 /* buffer_destruir: finaliza o buffer. */
@@ -159,6 +161,7 @@ static void buffer_destruir(Buffer *buf)
   sem_destroy(&buf->empty);
   sem_destroy(&buf->full_normal);
   sem_destroy(&buf->full_alerta);
+  sem_destroy(&buf->full_total);
   free(buf->dados);
 }
 
@@ -219,8 +222,11 @@ static void *orion(void *arg)
     buffer_inserir(&ctx->buf_orion_lua, &p);
 
     pthread_mutex_unlock(&ctx->buf_orion_lua.mutex);
-    if (p.temperatura > 80 || p.pressao < 50) sem_post(&ctx->buf_orion_lua.full_alerta);
-    else sem_post(&ctx->buf_orion_lua.full_normal);
+    if (p.temperatura > 80 || p.pressao < 50) 
+      sem_post(&ctx->buf_orion_lua.full_alerta);
+    else 
+      sem_post(&ctx->buf_orion_lua.full_normal);
+    sem_post(&ctx->buf_orion_lua.full_total);
 
     long total_enviados_atual;
     pthread_mutex_lock(&ctx->mutex_enviados);
@@ -253,8 +259,10 @@ static void *relay(void *arg)
 
     Pacote p;
 
-    if (sem_trywait(&ctx->buf_orion_lua.full_alerta) != 0) sem_wait(&ctx->buf_orion_lua.full_normal);
-    
+    sem_wait(&ctx->buf_orion_lua.full_total);
+    if (sem_trywait(&ctx->buf_orion_lua.full_alerta) != 0) 
+      sem_wait(&ctx->buf_orion_lua.full_normal);
+
     pthread_mutex_lock(&ctx->buf_orion_lua.mutex);
 
     buffer_remover(&ctx->buf_orion_lua, &p);
@@ -284,11 +292,11 @@ static void *relay(void *arg)
     buffer_inserir(&ctx->buf_lua_terra, &pr);
 
     pthread_mutex_unlock(&ctx->buf_lua_terra.mutex);
-    if (pr.prioridade == 1) {
+    if (pr.prioridade == 1)
       sem_post(&ctx->buf_lua_terra.full_alerta);
-    } else {
+    else
       sem_post(&ctx->buf_lua_terra.full_normal);
-    }
+    sem_post(&ctx->buf_lua_terra.full_total);
 
     pthread_mutex_lock(&ctx->mutex_relay);
 
@@ -315,6 +323,7 @@ static void *terra(void *arg)
 
     PacoteRelay pr;
 
+    sem_wait(&ctx->buf_lua_terra.full_total);
     if (sem_trywait(&ctx->buf_lua_terra.full_alerta) != 0)
       sem_wait(&ctx->buf_lua_terra.full_normal);
 
@@ -340,7 +349,7 @@ static void *terra(void *arg)
     pthread_mutex_lock(&ctx->mutex_recebidos);
 
     ctx->total_recebidos++;
-    
+
     pthread_mutex_unlock(&ctx->mutex_recebidos);
   }
 
