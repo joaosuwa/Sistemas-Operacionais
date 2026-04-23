@@ -77,6 +77,7 @@ typedef struct {
 typedef struct {
   Buffer  buf_orion_lua;   /* estágio 1: Orions → Relay              */
   Buffer  buf_lua_terra;   /* estágio 2: Relay  → Terra              */
+  Buffer  buf_prioridade;
   int     n_pacotes;       /* pacotes que cada Orion deve enviar      */
   int     n_orions;        /* número de threads Orion                 */
 
@@ -219,9 +220,13 @@ static void *orion(void *arg)
     sem_wait(&ctx->buf_orion_lua.empty);
     pthread_mutex_lock(&ctx->buf_orion_lua.mutex);
 
-    buffer_inserir(&ctx->buf_orion_lua, &p);
+    if(p.temperatura > 80 || p.pressao < 50)
+      buffer_inserir(&ctx->buf_prioridade, &p);
+    else
+      buffer_inserir(&ctx->buf_orion_lua, &p);
 
     pthread_mutex_unlock(&ctx->buf_orion_lua.mutex);
+
     if (p.temperatura > 80 || p.pressao < 50) 
       sem_post(&ctx->buf_orion_lua.full_alerta);
     else 
@@ -260,14 +265,22 @@ static void *relay(void *arg)
     Pacote p;
 
     sem_wait(&ctx->buf_orion_lua.full_total);
-    if (sem_trywait(&ctx->buf_orion_lua.full_alerta) != 0) 
+    if (sem_trywait(&ctx->buf_orion_lua.full_alerta) != 0){
       sem_wait(&ctx->buf_orion_lua.full_normal);
+      pthread_mutex_lock(&ctx->buf_orion_lua.mutex);
 
-    pthread_mutex_lock(&ctx->buf_orion_lua.mutex);
+      buffer_remover(&ctx->buf_orion_lua, &p);
 
-    buffer_remover(&ctx->buf_orion_lua, &p);
+      pthread_mutex_unlock(&ctx->buf_orion_lua.mutex);
+    }
+    else{
+      pthread_mutex_lock(&ctx->buf_orion_lua.mutex);
 
-    pthread_mutex_unlock(&ctx->buf_orion_lua.mutex);
+      buffer_remover(&ctx->buf_prioridade, &p);
+
+      pthread_mutex_unlock(&ctx->buf_orion_lua.mutex);
+
+    }
     sem_post(&ctx->buf_orion_lua.empty);
   
     /* Processamento: calcula checksum e timestamp */
@@ -398,6 +411,7 @@ int main(int argc, char *argv[])
 
   buffer_init(&ctx.buf_orion_lua, buf_orion_lua, sizeof(Pacote));
   buffer_init(&ctx.buf_lua_terra, buf_lua_terra, sizeof(PacoteRelay));
+  buffer_init(&ctx.buf_prioridade, buf_orion_lua, sizeof(Pacote));
 
   /* Criação das threads */
   pthread_t *threads_orion = calloc(n_orions, sizeof(pthread_t));
@@ -419,6 +433,7 @@ int main(int argc, char *argv[])
   /* Limpeza final */
   buffer_destruir(&ctx.buf_orion_lua);
   buffer_destruir(&ctx.buf_lua_terra);
+  buffer_destruir(&ctx.buf_prioridade);
   pthread_mutex_destroy(&ctx.mutex_enviados);
   pthread_mutex_destroy(&ctx.mutex_relay);
   pthread_mutex_destroy(&ctx.mutex_recebidos);
