@@ -95,9 +95,6 @@ int main(void)
      * ------------------------------------------------------------------ */
     listar_diretorio();
 
-    /* ------------------------------------------------------------------
-     * 5. Criar arquivos  [DESCOMENTE após implementar sofs_create/sofs_write]
-     * ------------------------------------------------------------------
     {
         SOFS_FILE arq;
         char dados[] = "Olá, sofs!";
@@ -121,11 +118,7 @@ int main(void)
             sofs_close(arq);
         }
     }
-    * ------------------------------------------------------------------ */
 
-    /* ------------------------------------------------------------------
-     * 6. Ler um arquivo  [DESCOMENTE após implementar sofs_open/sofs_read]
-     * ------------------------------------------------------------------
     {
         SOFS_FILE arq;
         char buf[128];
@@ -142,18 +135,9 @@ int main(void)
             sofs_close(arq);
         }
     }
-    * ------------------------------------------------------------------ */
 
-    /* ------------------------------------------------------------------
-     * 7. Listar diretório após criação dos arquivos
-     *    [DESCOMENTE junto com a seção 5]
-     * ------------------------------------------------------------------
     listar_diretorio();
-    * ------------------------------------------------------------------ */
 
-    /* ------------------------------------------------------------------
-     * 8. Criar softlink e hardlink  [DESCOMENTE após implementar sofs_sln/sofs_hln]
-     * ------------------------------------------------------------------
     printf("Criando softlink 'link_soft' -> 'teste.txt'...\n");
     if (sofs_sln("link_soft", "teste.txt") != 0)
         printf("  [erro] sofs_sln falhou\n");
@@ -167,11 +151,7 @@ int main(void)
         printf("  sofs_hln: OK\n");
 
     listar_diretorio();
-    * ------------------------------------------------------------------ */
 
-    /* ------------------------------------------------------------------
-     * 9. Remover arquivo  [DESCOMENTE após implementar sofs_delete]
-     * ------------------------------------------------------------------
     printf("Removendo arquivo 'teste.txt'...\n");
     if (sofs_delete("teste.txt") != 0)
         printf("  [erro] sofs_delete falhou\n");
@@ -179,7 +159,6 @@ int main(void)
         printf("  sofs_delete: OK\n");
 
     listar_diretorio();
-    * ------------------------------------------------------------------ */
 
     /* ------------------------------------------------------------------
      * 10. Desmontar a partição

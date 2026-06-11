@@ -506,7 +506,7 @@ static int free_inode(unsigned int inode_num)
 
 int sofs_identify(char *name, int size)
 {
-    const char *id = "sofs group";
+    const char *id = "Grupo K";
     if (name == NULL || size <= 0)
         return -1;
     strncpy(name, id, size - 1);
